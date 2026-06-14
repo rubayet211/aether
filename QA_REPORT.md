@@ -11,8 +11,8 @@ Date: 2026-06-14
 | ESLint | `pnpm lint` | Passed |
 | Production build | `pnpm build` | Passed |
 | Prisma generate | `pnpm prisma generate` | Passed |
-| Prisma schema push | `pnpm prisma db push` | Requires Turso credentials after libSQL migration |
-| Prisma seed | `pnpm prisma db seed` | Requires Turso credentials after libSQL migration |
+| Turso schema apply | `pnpm turso:schema` | Passed |
+| Prisma seed | `pnpm prisma db seed` | Passed |
 
 ## Manual QA
 

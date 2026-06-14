@@ -61,7 +61,7 @@ Client UI -> Next Route Handler -> Zod validation -> Service layer
 ```bash
 pnpm install
 pnpm prisma generate
-pnpm prisma db push
+pnpm turso:schema
 pnpm prisma db seed
 pnpm dev
 ```
@@ -104,9 +104,11 @@ Aether cannot reach Ollama Cloud. Check OLLAMA_API_KEY, OLLAMA_BASE_URL, and OLL
 Set `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN`, then push and seed the schema:
 
 ```bash
-pnpm prisma db push
+pnpm turso:schema
 pnpm prisma db seed
 ```
+
+`pnpm turso:schema` applies the checked-in Prisma migration SQL through the LibSQL client. This avoids Prisma schema-engine failures seen with `prisma db push` against Turso in the current Prisma 7 setup.
 
 ## Demo Flow
 

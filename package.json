@@ -9,7 +9,8 @@
     "test": "vitest run",
     "start": "next start",
     "lint": "eslint",
-    "prisma": "prisma"
+    "prisma": "prisma",
+    "turso:schema": "tsx scripts/apply-turso-schema.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.4.0",
