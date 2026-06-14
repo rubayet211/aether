@@ -1,0 +1,96 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model User {
+  id           String       @id @default(cuid())
+  name         String?
+  email        String?      @unique
+  currentLevel String       @default("beginner")
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  assessments  Assessment[]
+  progress     Progress[]
+  sessions     Session[]
+}
+
+model Topic {
+  id          String     @id @default(cuid())
+  name        String
+  slug        String     @unique
+  subject     String
+  description String?
+  order       Int
+  createdAt   DateTime   @default(now())
+  problems    Problem[]
+  progress    Progress[]
+  sessions    Session[]
+}
+
+model Assessment {
+  id        String   @id @default(cuid())
+  userId    String
+  score     Float
+  level     String
+  weakAreas Json
+  answers   Json
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Session {
+  id             String    @id @default(cuid())
+  userId         String
+  topicId        String?
+  title          String?
+  mode           String
+  summary        String?
+  keyTakeaways   Json?
+  misconceptions Json?
+  startedAt      DateTime  @default(now())
+  endedAt        DateTime?
+  messages       Message[]
+  topic          Topic?    @relation(fields: [topicId], references: [id])
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  sessionId String
+  role      String
+  content   String
+  metadata  Json?
+  createdAt DateTime @default(now())
+  session   Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+model Problem {
+  id         String   @id @default(cuid())
+  topicId    String
+  difficulty String
+  question   String
+  solution   String
+  hints      Json
+  createdAt  DateTime @default(now())
+  topic      Topic    @relation(fields: [topicId], references: [id], onDelete: Cascade)
+}
+
+model Progress {
+  id              String    @id @default(cuid())
+  userId          String
+  topicId         String
+  mastery         Float     @default(0)
+  attempts        Int       @default(0)
+  correctAttempts Int       @default(0)
+  lastPracticed   DateTime?
+  updatedAt       DateTime  @updatedAt
+  topic           Topic     @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, topicId])
+}
