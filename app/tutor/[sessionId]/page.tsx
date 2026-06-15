@@ -14,6 +14,12 @@ export default async function TutorSessionPage({ params }: { params: Promise<{ s
 
   if (!session) notFound();
 
+  const progress = session.topicId
+    ? await prisma.progress.findUnique({
+        where: { userId_topicId: { userId: session.userId, topicId: session.topicId } },
+      })
+    : null;
+
   return (
     <AppShell>
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
@@ -21,6 +27,7 @@ export default async function TutorSessionPage({ params }: { params: Promise<{ s
           sessionId={session.id}
           topicId={session.topicId ?? undefined}
           topicName={session.topic?.name ?? "Physics Reasoning"}
+          masteryScore={progress?.mastery ?? 35}
           initialMessages={session.messages.map((message) => ({
             id: message.id,
             role: message.role,

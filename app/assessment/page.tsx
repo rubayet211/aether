@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
 import { AssessmentProgress } from "@/components/assessment/assessment-progress";
@@ -30,6 +30,7 @@ export default function AssessmentPage() {
   const currentAnswer = question ? answers[question.id] : undefined;
   const canContinue = Boolean(currentAnswer?.selectedOptionId);
   const answerList = useMemo(() => Object.values(answers), [answers]);
+  const submittingRef = useRef(false);
 
   function updateAnswer(update: Partial<DiagnosticAnswer>) {
     if (!question) return;
@@ -45,21 +46,29 @@ export default function AssessmentPage() {
   }
 
   async function submit() {
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     setLoading(true);
     setError(null);
-    const response = await fetch("/api/assessment", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId: localStorage.getItem("aetherUserId") ?? undefined, answers: answerList }),
-    });
-    const payload = (await response.json()) as ApiResponse<AssessmentApiResult>;
-    setLoading(false);
-    if (!payload.ok) {
-      setError(payload.error);
-      return;
+    try {
+      const response = await fetch("/api/assessment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: localStorage.getItem("aetherUserId") ?? undefined, answers: answerList }),
+      });
+      const payload = (await response.json()) as ApiResponse<AssessmentApiResult>;
+      if (!payload.ok) {
+        setError(payload.error);
+        return;
+      }
+      localStorage.setItem("aetherUserId", payload.data.userId);
+      setResult(payload.data);
+    } catch {
+      setError("Could not reach the server. Check your connection and try again.");
+    } finally {
+      submittingRef.current = false;
+      setLoading(false);
     }
-    localStorage.setItem("aetherUserId", payload.data.userId);
-    setResult(payload.data);
   }
 
   if (result) {

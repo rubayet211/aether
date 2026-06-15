@@ -6,6 +6,10 @@ import { generateProblems } from "@/lib/ai/problem-service";
 export async function POST(request: Request) {
   try {
     const input = problemsRequestSchema.parse(await request.json());
+
+    const user = await prisma.user.findUnique({ where: { id: input.userId } });
+    if (!user) return jsonError(new Error("User not found. Complete the diagnostic first."), 404);
+
     const problems = await generateProblems(input);
     const topic =
       input.topicId !== undefined

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseProblemsJson } from "@/lib/ai/response-parser";
+import { parseProblemsJson, parseTutorResponse } from "@/lib/ai/response-parser";
 
 describe("parseProblemsJson", () => {
   it("extracts and validates generated problem JSON from model text", () => {
@@ -23,6 +23,32 @@ describe("parseProblemsJson", () => {
     expect(parsed.success).toBe(true);
     if (parsed.success) {
       expect(parsed.data[0]?.finalAnswer).toBe("6 N");
+    }
+  });
+
+  it("fails cleanly when no JSON is present", () => {
+    const parsed = parseProblemsJson("Sorry, I cannot help with that.");
+    expect(parsed.success).toBe(false);
+  });
+});
+
+describe("parseTutorResponse", () => {
+  it("extracts tutor JSON from a fenced markdown block", () => {
+    const parsed = parseTutorResponse(
+      "Here is my reply:\n```json\n" +
+        JSON.stringify({
+          message: "What forces act on the box?",
+          detectedMisconceptions: [],
+          suggestedNextAction: "answer_next_question",
+          reasoningQuality: "partial",
+          misconceptionPersisted: false,
+        }) +
+        "\n```",
+    );
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.message).toContain("forces");
+      expect(parsed.data.suggestedNextAction).toBe("answer_next_question");
     }
   });
 });

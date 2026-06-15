@@ -10,4 +10,27 @@ describe("demoTutorResponse", () => {
     );
     expect(response.message).toContain("common thought");
   });
+
+  it("returns a hint (not a question) for the hint action", () => {
+    const response = demoTutorResponse("I need a hint.", "hint");
+    expect(response.message.toLowerCase()).toContain("hint");
+    expect(response.message).not.toMatch(/\?$/);
+  });
+
+  it("returns an explanation for the explain action", () => {
+    const response = demoTutorResponse("Please explain this concept more.", "explain");
+    expect(response.message.toLowerCase()).toContain("f = ma");
+  });
+
+  it("steers to practice generation for the practice action", () => {
+    const response = demoTutorResponse("Give me practice.", "practice");
+    expect(response.suggestedNextAction).toBe("generate_practice");
+  });
+
+  it("produces different messages per action for the same input", () => {
+    const message = demoTutorResponse("ok", "message").message;
+    const hint = demoTutorResponse("ok", "hint").message;
+    const explain = demoTutorResponse("ok", "explain").message;
+    expect(new Set([message, hint, explain]).size).toBe(3);
+  });
 });

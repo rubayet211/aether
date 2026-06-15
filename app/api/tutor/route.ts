@@ -12,7 +12,11 @@ export async function POST(request: Request) {
       include: { topic: true },
     });
     if (!session) return jsonError(new Error("Session not found."), 404);
+    if (session.endedAt) return jsonError(new Error("This session has already ended."), 409);
 
+    // Save the student message first so the tutor context (built inside
+    // getTutorReply) includes the latest turn. The AI call can take many
+    // seconds, so it must run outside of any database transaction.
     await prisma.message.create({
       data: {
         sessionId: input.sessionId,
@@ -23,37 +27,40 @@ export async function POST(request: Request) {
     });
 
     const aiMessage = await getTutorReply(input);
+    const reasoningQuality = aiMessage.reasoningQuality ?? inferReasoningQuality(input.userMessage);
 
-    await prisma.message.create({
-      data: {
-        sessionId: input.sessionId,
-        role: "assistant",
-        content: aiMessage.message,
-        metadata: {
-          detectedMisconceptions: aiMessage.detectedMisconceptions,
-          suggestedNextAction: aiMessage.suggestedNextAction,
-          aiUnavailable: aiMessage.aiUnavailable ?? false,
+    // Persist the assistant reply and the progress update atomically so we
+    // never advance mastery without a saved reply (or vice versa).
+    const updatedProgress = await prisma.$transaction(async (tx) => {
+      await tx.message.create({
+        data: {
+          sessionId: input.sessionId,
+          role: "assistant",
+          content: aiMessage.message,
+          metadata: {
+            detectedMisconceptions: aiMessage.detectedMisconceptions,
+            suggestedNextAction: aiMessage.suggestedNextAction,
+            aiUnavailable: aiMessage.aiUnavailable ?? false,
+          },
         },
-      },
-    });
+      });
 
-    let updatedProgress: { mastery: number; delta: number } | null = null;
-    if (session.topicId) {
-      const existing = await prisma.progress.findUnique({
+      if (!session.topicId) return null;
+
+      const existing = await tx.progress.findUnique({
         where: { userId_topicId: { userId: session.userId, topicId: session.topicId } },
       });
-      const reasoningQuality = aiMessage.reasoningQuality ?? inferReasoningQuality(input.userMessage);
-      updatedProgress = estimateMasteryUpdate({
+      const result = estimateMasteryUpdate({
         currentMastery: existing?.mastery ?? 30,
         reasoningQuality,
         hintCount: input.action === "hint" ? 1 : 0,
         misconceptionPersisted: aiMessage.misconceptionPersisted,
       });
 
-      await prisma.progress.upsert({
+      await tx.progress.upsert({
         where: { userId_topicId: { userId: session.userId, topicId: session.topicId } },
         update: {
-          mastery: updatedProgress.mastery,
+          mastery: result.mastery,
           attempts: { increment: 1 },
           correctAttempts: reasoningQuality === "strong" ? { increment: 1 } : undefined,
           lastPracticed: new Date(),
@@ -61,13 +68,15 @@ export async function POST(request: Request) {
         create: {
           userId: session.userId,
           topicId: session.topicId,
-          mastery: updatedProgress.mastery,
+          mastery: result.mastery,
           attempts: 1,
           correctAttempts: reasoningQuality === "strong" ? 1 : 0,
           lastPracticed: new Date(),
         },
       });
-    }
+
+      return result;
+    });
 
     return jsonOk({
       aiMessage: aiMessage.message,

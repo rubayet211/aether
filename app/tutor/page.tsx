@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
@@ -14,27 +14,42 @@ export default function TutorStartPage() {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  // Synchronous lock: `disabled` only applies after a re-render, so a fast
+  // double-click could fire two requests and create two sessions.
+  const startingRef = useRef(false);
 
   async function startSession() {
+    if (startingRef.current) return;
     const userId = localStorage.getItem("aetherUserId");
     if (!userId) {
       setError("Complete the diagnostic first so Aether can personalize tutoring.");
       return;
     }
+    startingRef.current = true;
     setLoading(true);
     setError(null);
-    const response = await fetch("/api/sessions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId, mode: "guided_reasoning" }),
-    });
-    const payload = (await response.json()) as ApiResponse<{ session: { id: string } }>;
-    setLoading(false);
-    if (!payload.ok) {
-      setError(payload.error);
-      return;
+    try {
+      const response = await fetch("/api/sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, mode: "guided_reasoning" }),
+      });
+      const payload = (await response.json()) as ApiResponse<{ session: { id: string } }>;
+      if (!payload.ok) {
+        setError(payload.error);
+        return;
+      }
+      if (!payload.data.session?.id) {
+        setError("Session could not be created. Please try again.");
+        return;
+      }
+      // Keep the button locked through navigation so it cannot be clicked again.
+      router.push(`/tutor/${payload.data.session.id}`);
+    } catch {
+      setError("Could not reach the server. Check your connection and try again.");
+      startingRef.current = false;
+      setLoading(false);
     }
-    router.push(`/tutor/${payload.data.session.id}`);
   }
 
   return (

@@ -22,34 +22,67 @@ export async function PATCH(request: Request, context: { params: Promise<{ sessi
   try {
     endSessionRequestSchema.parse(await request.json());
     const { sessionId } = await context.params;
-    const summary = await summarizeSession(sessionId);
 
-    const session = await prisma.session.update({
+    const existing = await prisma.session.findUnique({
       where: { id: sessionId },
-      data: {
-        endedAt: new Date(),
-        summary: summary.summary,
-        keyTakeaways: summary.keyTakeaways,
-        misconceptions: summary.misconceptions,
-      },
       include: { topic: true, messages: { orderBy: { createdAt: "asc" } } },
     });
+    if (!existing) return jsonError(new Error("Session not found."), 404);
 
-    if (session.topicId) {
-      await prisma.progress.upsert({
-        where: { userId_topicId: { userId: session.userId, topicId: session.topicId } },
-        update: {
-          mastery: summary.updatedMasteryEstimate,
-          lastPracticed: new Date(),
+    // Idempotency: ending an already-ended session must not regenerate the
+    // summary or re-apply the mastery update. Return the saved state instead.
+    if (existing.endedAt) {
+      return jsonOk({
+        session: existing,
+        summary: {
+          summary: existing.summary ?? "",
+          keyTakeaways: (existing.keyTakeaways as string[] | null) ?? [],
+          misconceptions: (existing.misconceptions as string[] | null) ?? [],
+          recommendedNextStep: "Review your dashboard to choose the next topic.",
+          updatedMasteryEstimate: existing.topicId
+            ? (
+                await prisma.progress.findUnique({
+                  where: { userId_topicId: { userId: existing.userId, topicId: existing.topicId } },
+                })
+              )?.mastery ?? 0
+            : 0,
         },
-        create: {
-          userId: session.userId,
-          topicId: session.topicId,
-          mastery: summary.updatedMasteryEstimate,
-          lastPracticed: new Date(),
-        },
+        alreadyEnded: true,
       });
     }
+
+    const summary = await summarizeSession(sessionId);
+
+    const session = await prisma.$transaction(async (tx) => {
+      const updated = await tx.session.update({
+        where: { id: sessionId },
+        data: {
+          endedAt: new Date(),
+          summary: summary.summary,
+          keyTakeaways: summary.keyTakeaways,
+          misconceptions: summary.misconceptions,
+        },
+        include: { topic: true, messages: { orderBy: { createdAt: "asc" } } },
+      });
+
+      if (updated.topicId) {
+        await tx.progress.upsert({
+          where: { userId_topicId: { userId: updated.userId, topicId: updated.topicId } },
+          update: {
+            mastery: summary.updatedMasteryEstimate,
+            lastPracticed: new Date(),
+          },
+          create: {
+            userId: updated.userId,
+            topicId: updated.topicId,
+            mastery: summary.updatedMasteryEstimate,
+            lastPracticed: new Date(),
+          },
+        });
+      }
+
+      return updated;
+    });
 
     return jsonOk({ session, summary });
   } catch (error) {

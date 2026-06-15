@@ -12,14 +12,15 @@ export async function getTutorReply(input: {
   action: "message" | "hint" | "explain" | "practice";
 }): Promise<TutorResponse & { aiUnavailable?: boolean }> {
   const context = await buildTutorContext(input.sessionId);
-  const system = socraticTutorPrompt({ ...context, mode: input.mode });
+  const system = socraticTutorPrompt({ ...context, mode: input.mode, action: input.action });
   const prompt = `Student action: ${input.action}\nStudent message: ${input.userMessage}`;
 
   if (process.env.AETHER_DEMO_MODE === "true") {
-    return demoTutorResponse(input.userMessage);
+    return demoTutorResponse(input.userMessage, input.action);
   }
 
-  const result = await generateWithOllama({ system, prompt, temperature: input.mode === "explain" ? 0.35 : 0.4 });
+  const explanatory = input.action === "explain" || input.mode === "explain";
+  const result = await generateWithOllama({ system, prompt, temperature: explanatory ? 0.35 : 0.4 });
   if (!result.ok) {
     return {
       message: aiUnavailableMessage,
@@ -32,5 +33,5 @@ export async function getTutorReply(input: {
   }
 
   const parsed = parseTutorResponse(result.text);
-  return parsed.success ? parsed.data : demoTutorResponse(input.userMessage);
+  return parsed.success ? parsed.data : demoTutorResponse(input.userMessage, input.action);
 }

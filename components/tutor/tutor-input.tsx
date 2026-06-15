@@ -32,7 +32,7 @@ export function TutorInput({
         onKeyDown={(event) => {
           if (event.key === "Enter" && !event.shiftKey) {
             event.preventDefault();
-            onSubmit();
+            if (!disabled && value.trim().length > 0) onSubmit();
           }
         }}
         placeholder="Explain your thinking, not just your answer..."
